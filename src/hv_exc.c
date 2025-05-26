@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 
 #include "hv.h"
+#include "hv_gicv2.h"
 #include "assert.h"
 #include "cpu_regs.h"
 #include "exception.h"
@@ -155,19 +156,24 @@ static void hv_update_fiq(void)
 {
     u64 hcr = mrs(HCR_EL2);
     bool fiq_pending = false;
+    int cpu = smp_id();
 
     if (mrs(CNTP_CTL_EL02) == (CNTx_CTL_ISTATUS | CNTx_CTL_ENABLE)) {
         fiq_pending = true;
         reg_clr(SYS_IMP_APL_VM_TMR_FIQ_ENA_EL2, VM_TMR_FIQ_ENA_ENA_P);
+        hv_vgicv2_notify_timer_interrupt(cpu, Physical, true);
     } else {
         reg_set(SYS_IMP_APL_VM_TMR_FIQ_ENA_EL2, VM_TMR_FIQ_ENA_ENA_P);
+        hv_vgicv2_notify_timer_interrupt(cpu, Physical, false);
     }
 
     if (mrs(CNTV_CTL_EL02) == (CNTx_CTL_ISTATUS | CNTx_CTL_ENABLE)) {
         fiq_pending = true;
         reg_clr(SYS_IMP_APL_VM_TMR_FIQ_ENA_EL2, VM_TMR_FIQ_ENA_ENA_V);
+        hv_vgicv2_notify_timer_interrupt(cpu, Virtual, true);
     } else {
         reg_set(SYS_IMP_APL_VM_TMR_FIQ_ENA_EL2, VM_TMR_FIQ_ENA_ENA_V);
+        hv_vgicv2_notify_timer_interrupt(cpu, Virtual, false);
     }
 
     fiq_pending |= PERCPU(ipi_pending) || PERCPU(pmc_pending);

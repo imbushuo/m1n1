@@ -21,11 +21,14 @@
 
 ### IRQ
 
-- Ack the IRQ on behalf of the guest.
-- Retrieve the guest-facing IRQ number, deliver the interrupt to the IRQ's corresponding CPU core.
+- Ack the IRQ on behalf of the guest.  Retrieve the guest-facing IRQ number. AIC will mask the interrupt for now.
+- Put it in the associating CPU's GICC (GICC_IAR)
+- Signal the hypervisor regarding this interrupt's arrival.
+- Guest will read it and complete acknowledgement by writing to GICC_EOIR.
+- Once GICC_EOIR is written, notify AIC to unmask the interrupt.
 
 ### SGI / IPI
 
-- Note the inbound IPI to the CPU core via a mux mechanism.
+- Note the inbound IPI to the CPU core and source via a mux mechanism.
 - Kick the IPI to the target CPU core.
 - The target CPU core ack the IPI, read the mux to know which SGI was signaled, then deliver the interrupt to the SGI's corresponding CPU core.

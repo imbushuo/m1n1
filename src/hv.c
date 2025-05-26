@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 
 #include "hv.h"
+#include "hv_gicv2.h"
 #include "assert.h"
 #include "cpu_regs.h"
 #include "display.h"
@@ -72,10 +73,14 @@ void hv_init(void)
                  HCR_E2H | // VHE mode (forced)
                  HCR_RW |  // AArch64 guest
                  HCR_AMO | // Trap SError exceptions
+                 // TODO: Trap FIQ as well
                  HCR_VM);  // Enable stage 2 translation
 
     // No guest vectors initially
     msr(VBAR_EL12, 0);
+
+    // GICv2
+    hv_vgicv2_init();
 
     // Compute tick interval
     hv_tick_interval = mrs(CNTFRQ_EL0) / HV_TICK_RATE;
