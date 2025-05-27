@@ -125,7 +125,7 @@ void hv_start(void *entry, u64 regs[4])
     memset(hv_started_cpus, 0, sizeof(hv_started_cpus));
 
     hv_started_cpus[boot_cpu_idx] = true;
-
+    hv_vgicv2_cpuintf_init(boot_cpu_idx);
     msr(VBAR_EL1, _hv_vectors_start);
 
     if (gxf_enabled())
@@ -193,6 +193,7 @@ static void hv_init_secondary(struct hv_secondary_info_t *info)
 {
     gxf_init();
 
+    hv_vgicv2_cpuintf_init(smp_id());
     msr(VBAR_EL1, _hv_vectors_start);
 
     msr(HCR_EL2, info->hcr);
