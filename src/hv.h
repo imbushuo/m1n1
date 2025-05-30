@@ -51,6 +51,16 @@ typedef enum _hv_entry_type {
     HV_PANIC,
 } hv_entry_type;
 
+struct hv_pcpu_data {
+    u32 ipi_queued;
+    u32 ipi_pending;
+    u32 pmc_pending;
+    u64 pmc_irq_mode;
+    u64 exc_entry_pmcr0_cnt;
+    u32 irq_fired;
+    u32 irq_reason;
+} ALIGNED(64);
+
 /* VM */
 void hv_pt_init(void);
 int hv_map(u64 from, u64 to, u64 size, u64 incr);
@@ -119,5 +129,7 @@ void hv_arm_tick(bool secondary);
 void hv_rearm(void);
 void hv_maybe_exit(void);
 void hv_tick(struct exc_info *ctx);
+
+void hv_hook_aic(void);
 
 #endif

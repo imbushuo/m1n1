@@ -26,7 +26,32 @@ static bool hv_vgicv2_handle_gicd_mmio(struct exc_info *ctx, u64 addr, u64 *val,
 
 static bool hv_vgicv2_handle_gicc_mmio(struct exc_info *ctx, u64 addr, u64 *val, bool write, int width)
 {
-    UNUSED(ctx);
+    bool handled = true;
+
+    // Make sure we don't get out of bound
+    int cpu = ctx->cpu_id;
+    assert(cpu < NR_GICV2_MAX_CPUS);
+
+    // All GICC reads
+    if (!write)
+    {
+        switch (addr)
+        {
+            case GICC_CTLR:
+                *val = g_GicV2State.CpuState[cpu].GicCpuControl;
+                break;
+            case GICC_PMR:
+                *val = g_GicV2State.CpuState[cpu].GicCpuPriorityMask;
+                break;
+            case GICC_BPR:
+                *val = g_GicV2State.CpuState[cpu].GicCpuBinaryPoint;
+                break;
+            case GICC_IAR:
+                *val = g_GicV2State.CpuState[cpu].PendingInterruptState;
+                break;
+        }
+    }
+
     UNUSED(addr);
     UNUSED(val);
     UNUSED(write);

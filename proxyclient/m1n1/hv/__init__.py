@@ -1401,7 +1401,7 @@ class HV(Reloadable):
         hcr.TIDCP = 0
         hcr.TVM = 0
         hcr.FMO = 1
-        hcr.IMO = 0
+        hcr.IMO = 1
         hcr.TTLBOS = 1
         self.u.msr(HCR_EL2, hcr.value)
 

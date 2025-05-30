@@ -5,50 +5,36 @@
 #include "aic_regs.h"
 #include "hv.h"
 #include "uartproxy.h"
+#include "smp.h"
 #include "utils.h"
 
 #define IRQTRACE_IRQ BIT(0)
+#define PERCPU(x) pcpu[mrs(TPIDR_EL2)].x
 
+#define MAX_CPUS     24
 static u32 trace_hw_num[AIC_MAX_DIES][AIC_MAX_HW_NUM / 32];
-
-static void emit_irqtrace(u16 die, u16 type, u16 num)
-{
-    struct hv_evt_irqtrace evt = {
-        .flags = IRQTRACE_IRQ,
-        .type = type,
-        .num = die * aic->max_irq + num,
-    };
-
-    hv_wdt_suspend();
-    uartproxy_send_event(EVT_IRQTRACE, &evt, sizeof(evt));
-    hv_wdt_resume();
-}
+extern struct hv_pcpu_data pcpu[MAX_CPUS];
 
 static bool trace_aic_event(struct exc_info *ctx, u64 addr, u64 *val, bool write, int width)
 {
+    if (addr == (aic->base + aic->regs.event) && !write)
+    {
+        if (PERCPU(irq_fired))
+        {
+            *val = PERCPU(irq_reason);
+            u64 hcr = mrs(HCR_EL2);
+            hv_write_hcr(hcr & ~HCR_VI);
+            PERCPU(irq_fired) = false;
+        }
+
+        return true;
+    }
+
     if (!hv_pa_rw(ctx, addr, val, write, width))
         return false;
 
     if (addr != (aic->base + aic->regs.event) || write || width != 2) {
         return true;
-    }
-
-    u16 die = FIELD_GET(AIC_EVENT_DIE, *val);
-    u16 type = FIELD_GET(AIC_EVENT_TYPE, *val);
-    u16 num = FIELD_GET(AIC_EVENT_NUM, *val);
-
-    if (die > AIC_MAX_DIES)
-        return true;
-
-    switch (type) {
-        case AIC_EVENT_TYPE_HW:
-            if (trace_hw_num[die][num / 32] & BIT(num & 31)) {
-                emit_irqtrace(die, type, num);
-            }
-            break;
-        default:
-            // ignore
-            break;
     }
 
     return true;
@@ -92,4 +78,14 @@ bool hv_trace_irq(u32 type, u32 num, u32 count, u32 flags)
     }
 
     return true;
+}
+
+void hv_hook_aic(void)
+{
+    static bool hooked = false;
+
+    if (aic && !hooked) {
+        hv_map_hook(aic->base, trace_aic_event, aic->regs.reg_size);
+        hooked = true;
+    }
 }

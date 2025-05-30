@@ -19,10 +19,29 @@
 #define NR_PPI_BEGIN 16
 #define NR_SPI_BEGIN 32
 
+#define GICC_CTLR   0x0000
+#define GICC_PMR    0x0004
+#define GICC_BPR    0x0008
+#define GICC_IAR    0x000C
+#define GICC_EOIR   0x0010
+#define GICC_RPR    0x0014
+#define GICC_HPPIR  0x0018
+#define GICC_ABPR   0x001C
+#define GICC_AIAR   0x0020
+#define GICC_AEOIR  0x0024
+#define GICC_AHPPIR 0x0028
+#define GICC_DIR    0x1000
+
 typedef struct _HV_GICV2_CPU_STATE {
     u64 CpuId;
+
+    // Registers
+    u64 GicCpuControl;
+    u64 GicCpuPriorityMask;
+    u64 GicCpuBinaryPoint;
     // Pending Interrupt state, basically this is GICC_IAR
     u64 PendingInterruptState;
+
     // 16 SGIs, represented by bitmap of u64
     u64 IntcSgiEnabled;
     u64 IntcSgiBits;
