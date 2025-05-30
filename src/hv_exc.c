@@ -513,10 +513,14 @@ void hv_exc_irq(struct exc_info *ctx)
     if (smp_id() != interruptible_cpu && !(mrs(ISR_EL1) & 0x40) && hv_want_cpu == -1) {
         if ((mrs(ISR_EL1) & 0x80))
         {
-            u64 hcr = mrs(HCR_EL2);
             PERCPU(irq_reason) = read32(aic->base + aic->regs.event);
-            PERCPU(irq_fired) = true;
-            hv_write_hcr(hcr | HCR_VI);
+            if (PERCPU(irq_reason) != 0)
+            {
+                printf("IRQ on CPU%d 0x%x\n", smp_id(), PERCPU(irq_reason));
+                u64 hcr = mrs(HCR_EL2);
+                PERCPU(irq_fired) = true;
+                hv_write_hcr(hcr | HCR_VI);
+            }
         }
         return;
     }
@@ -527,14 +531,15 @@ void hv_exc_irq(struct exc_info *ctx)
 
     if ((mrs(ISR_EL1) & 0x80))
     {
-        u64 hcr = mrs(HCR_EL2);
         PERCPU(irq_reason) = read32(aic->base + aic->regs.event);
-        PERCPU(irq_fired) = true;
-        hv_write_hcr(hcr | HCR_VI);
+        if (PERCPU(irq_reason) != 0)
+        {
+            printf("IRQ on CPU%d 0x%x\n", smp_id(), PERCPU(irq_reason));
+            u64 hcr = mrs(HCR_EL2);
+            PERCPU(irq_fired) = true;
+            hv_write_hcr(hcr | HCR_VI);
+        }
     }
-
-    sysop("isb");
-    hv_maybe_switch_cpu(ctx, START_HV, HV_CPU_SWITCH, NULL);
 
     hv_exc_exit(ctx);
     hv_wdt_breadcrumb('i');
