@@ -23,7 +23,11 @@ static bool trace_aic_event(struct exc_info *ctx, u64 addr, u64 *val, bool write
         {
             *val = PERCPU(irq_reason);
             u64 hcr = mrs(HCR_EL2);
-            hv_write_hcr(hcr & ~HCR_VI);
+            if (hcr & HCR_VI)
+            {
+                hv_write_hcr(hcr & ~HCR_VI);
+            }
+            PERCPU(irq_reason) = 0;
             PERCPU(irq_fired) = false;
         }
 

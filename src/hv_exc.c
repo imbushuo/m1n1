@@ -499,52 +499,23 @@ void hv_exc_sync(struct exc_info *ctx)
 
 void hv_exc_irq(struct exc_info *ctx)
 {
-    // hv_wdt_breadcrumb('I');
-    // hv_get_context(ctx);
-    // hv_exc_entry();
-    // hv_exc_proxy(ctx, START_EXCEPTION_LOWER, EXC_IRQ, NULL);
-
-    hv_maybe_exit();
-
-    int interruptible_cpu = hv_pinned_cpu;
-    if (interruptible_cpu == -1)
-        interruptible_cpu = boot_cpu_idx;
-
-    if (smp_id() != interruptible_cpu && !(mrs(ISR_EL1) & 0x40) && hv_want_cpu == -1) {
-        if ((mrs(ISR_EL1) & 0x80))
-        {
-            PERCPU(irq_reason) = read32(aic->base + aic->regs.event);
-            if (PERCPU(irq_reason) != 0)
-            {
-                // printf("IRQ on CPU%d 0x%x\n", smp_id(), PERCPU(irq_reason));
-                u64 hcr = mrs(HCR_EL2);
-                PERCPU(irq_fired) = true;
-                hv_write_hcr(hcr | HCR_VI);
-                sysop("isb");
-            }
-        }
-        return;
-    }
-
-    hv_wdt_breadcrumb('I');
-    hv_get_context(ctx);
-    hv_exc_entry();
-
     if ((mrs(ISR_EL1) & 0x80))
     {
         PERCPU(irq_reason) = read32(aic->base + aic->regs.event);
-        if (PERCPU(irq_reason) != 0)
+        // printf("IRQ on CPU%d 0x%x\n", smp_id(), PERCPU(irq_reason));
+        if (PERCPU(irq_reason) && !PERCPU(irq_fired))
         {
-            // printf("IRQ on CPU%d 0x%x\n", smp_id(), PERCPU(irq_reason));
             u64 hcr = mrs(HCR_EL2);
             PERCPU(irq_fired) = true;
             hv_write_hcr(hcr | HCR_VI);
-            sysop("isb");
         }
+        else if (PERCPU(irq_reason))
+        {
+            printf("Warning: on CPU%d there's pending IRQ not ack'd by VM but new IRQ arriving\n", smp_id());
+        }
+        // sysop("dsb sy");
+        // sysop("isb");
     }
-
-    hv_exc_exit(ctx);
-    hv_wdt_breadcrumb('i');
 }
 
 void hv_exc_fiq(struct exc_info *ctx)
