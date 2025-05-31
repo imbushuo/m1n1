@@ -516,10 +516,11 @@ void hv_exc_irq(struct exc_info *ctx)
             PERCPU(irq_reason) = read32(aic->base + aic->regs.event);
             if (PERCPU(irq_reason) != 0)
             {
-                printf("IRQ on CPU%d 0x%x\n", smp_id(), PERCPU(irq_reason));
+                // printf("IRQ on CPU%d 0x%x\n", smp_id(), PERCPU(irq_reason));
                 u64 hcr = mrs(HCR_EL2);
                 PERCPU(irq_fired) = true;
                 hv_write_hcr(hcr | HCR_VI);
+                sysop("isb");
             }
         }
         return;
@@ -534,10 +535,11 @@ void hv_exc_irq(struct exc_info *ctx)
         PERCPU(irq_reason) = read32(aic->base + aic->regs.event);
         if (PERCPU(irq_reason) != 0)
         {
-            printf("IRQ on CPU%d 0x%x\n", smp_id(), PERCPU(irq_reason));
+            // printf("IRQ on CPU%d 0x%x\n", smp_id(), PERCPU(irq_reason));
             u64 hcr = mrs(HCR_EL2);
             PERCPU(irq_fired) = true;
             hv_write_hcr(hcr | HCR_VI);
+            sysop("isb");
         }
     }
 
