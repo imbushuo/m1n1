@@ -499,12 +499,14 @@ void hv_exc_sync(struct exc_info *ctx)
 
 void hv_exc_irq(struct exc_info *ctx)
 {
+    UNUSED(ctx);
+
     if ((mrs(ISR_EL1) & 0x80))
     {
         PERCPU(irq_reason) = read32(aic->base + aic->regs.event);
-        // printf("IRQ on CPU%d 0x%x\n", smp_id(), PERCPU(irq_reason));
         if (PERCPU(irq_reason) && !PERCPU(irq_fired))
         {
+            printf("IRQ on CPU%d 0x%x\n", smp_id(), PERCPU(irq_reason));
             u64 hcr = mrs(HCR_EL2);
             PERCPU(irq_fired) = true;
             hv_write_hcr(hcr | HCR_VI);
