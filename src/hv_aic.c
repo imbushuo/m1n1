@@ -17,7 +17,7 @@ extern struct hv_pcpu_data pcpu[MAX_CPUS];
 
 static bool trace_aic_event(struct exc_info *ctx, u64 addr, u64 *val, bool write, int width)
 {
-    if (addr == (aic->base + aic->regs.event) && !write)
+    if (addr == (aic->base + aic->regs.event) && !write && width == 2)
     {
         if (PERCPU(irq_fired))
         {

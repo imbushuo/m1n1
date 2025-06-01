@@ -23,7 +23,7 @@
 
 - Ack the IRQ on behalf of the guest.  Retrieve the guest-facing IRQ number. AIC will mask the interrupt for now.
 - Put it in the associating CPU's GICC (GICC_IAR)
-- Signal the hypervisor regarding this interrupt's arrival.
+- Upon leaving the hypervisor and entering the guest, evanlate the situation and signal the hypervisor regarding this interrupt's arrival.
 - Guest will read it and complete acknowledgement by writing to GICC_EOIR.
 - Once GICC_EOIR is written, notify AIC to unmask the interrupt.
 

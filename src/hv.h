@@ -51,12 +51,19 @@ typedef enum _hv_entry_type {
     HV_PANIC,
 } hv_entry_type;
 
+#define MAX_ALLOWED_PENDING_INTERRUPTS 1024
+
 struct hv_pcpu_data {
     u32 ipi_queued;
     u32 ipi_pending;
     u32 pmc_pending;
     u64 pmc_irq_mode;
     u64 exc_entry_pmcr0_cnt;
+
+    // Improved interrupt handling
+    u32 pending_irq_readouts[MAX_ALLOWED_PENDING_INTERRUPTS];
+    u64 total_pending_irqs;
+
     u32 irq_fired;
     u32 irq_reason;
 } ALIGNED(64);
