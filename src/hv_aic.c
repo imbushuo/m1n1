@@ -33,7 +33,7 @@ static bool trace_aic_event(struct exc_info *ctx, u64 addr, u64 *val, bool write
             {
                 PERCPU(total_pending_irqs) = -1;
             }
-        }        
+        }
         hv_aic_crit_end(daif);
         *val = readout;
         // printf("HV: CPU%d AIC event readout: 0x%x from %ld\n", smp_id(), readout, cnt_pending_irq);
@@ -101,7 +101,7 @@ void hv_hook_aic(void)
 
     printf("Initialize AIC hook and per CPU state on CPU%d\n", smp_id());
     u64 daif = hv_aic_crit_start();
-    memset(PERCPU(pending_irq_readouts), 0, sizeof(PERCPU(pending_irq_readouts)));
+    // memset(PERCPU(pending_irq_readouts), 0, sizeof(PERCPU(pending_irq_readouts)));
     PERCPU(total_pending_irqs) = -1;
     hv_aic_crit_end(daif);
     printf("CPU%d: DAIF 0x%lx\n", smp_id(), daif);
@@ -171,13 +171,13 @@ void hv_read_pending_irqs(void)
 {
     u32 irq = 0;
 
+    u64 daif = hv_aic_crit_start();
     do
     {
         u32 irq = read32(aic->base + aic->regs.event);
         bool overflow = false;
         if (irq != 0)
         {
-            u64 daif = hv_aic_crit_start();
             int64_t idx = ++PERCPU(total_pending_irqs);
             {
                 if (PERCPU(total_pending_irqs) < MAX_ALLOWED_PENDING_INTERRUPTS)
@@ -189,7 +189,6 @@ void hv_read_pending_irqs(void)
                     overflow = true;
                 }
             }
-            hv_aic_crit_end(daif);
 
             if (overflow)
             {
@@ -203,4 +202,5 @@ void hv_read_pending_irqs(void)
         }
     }
     while (irq != 0);
+    hv_aic_crit_end(daif);
 }
