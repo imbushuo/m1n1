@@ -62,10 +62,7 @@ struct hv_pcpu_data {
 
     // Improved interrupt handling
     u32 pending_irq_readouts[MAX_ALLOWED_PENDING_INTERRUPTS];
-    u64 total_pending_irqs;
-
-    u32 irq_fired;
-    u32 irq_reason;
+    volatile int64_t total_pending_irqs;
 } ALIGNED(64);
 
 /* VM */
@@ -137,6 +134,11 @@ void hv_rearm(void);
 void hv_maybe_exit(void);
 void hv_tick(struct exc_info *ctx);
 
+/* Interrupt hacks */
 void hv_hook_aic(void);
+void hv_read_pending_irqs(void);
+void hv_evaluate_pending_irqs(void);
+u64 hv_aic_crit_start(void);
+void hv_aic_crit_end(u64 daif_state);
 
 #endif

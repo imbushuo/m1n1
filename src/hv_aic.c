@@ -7,6 +7,7 @@
 #include "uartproxy.h"
 #include "smp.h"
 #include "utils.h"
+#include "string.h"
 
 #define IRQTRACE_IRQ BIT(0)
 #define PERCPU(x) pcpu[mrs(TPIDR_EL2)].x
@@ -19,18 +20,23 @@ static bool trace_aic_event(struct exc_info *ctx, u64 addr, u64 *val, bool write
 {
     if (addr == (aic->base + aic->regs.event) && !write && width == 2)
     {
-        if (PERCPU(irq_fired))
+        u32 readout = 0;
+        u64 daif = hv_aic_crit_start();
+        int64_t cnt_pending_irq = PERCPU(total_pending_irqs)--;
         {
-            *val = PERCPU(irq_reason);
-            u64 hcr = mrs(HCR_EL2);
-            if (hcr & HCR_VI)
+            if (cnt_pending_irq >= 0)
             {
-                hv_write_hcr(hcr & ~HCR_VI);
+                readout = PERCPU(pending_irq_readouts)[cnt_pending_irq];
+                PERCPU(pending_irq_readouts)[cnt_pending_irq] = (u32) 0x0;
             }
-            PERCPU(irq_reason) = 0;
-            PERCPU(irq_fired) = false;
-        }
-
+            else if (cnt_pending_irq <= -1)
+            {
+                PERCPU(total_pending_irqs) = -1;
+            }
+        }        
+        hv_aic_crit_end(daif);
+        *val = readout;
+        // printf("HV: CPU%d AIC event readout: 0x%x from %ld\n", smp_id(), readout, cnt_pending_irq);
         return true;
     }
 
@@ -92,4 +98,109 @@ void hv_hook_aic(void)
         hv_map_hook(aic->base, trace_aic_event, aic->regs.reg_size);
         hooked = true;
     }
+
+    printf("Initialize AIC hook and per CPU state on CPU%d\n", smp_id());
+    u64 daif = hv_aic_crit_start();
+    memset(PERCPU(pending_irq_readouts), 0, sizeof(PERCPU(pending_irq_readouts)));
+    PERCPU(total_pending_irqs) = -1;
+    hv_aic_crit_end(daif);
+    printf("CPU%d: DAIF 0x%lx\n", smp_id(), daif);
+}
+
+void hv_interrupt_set_irq_pending(void)
+{
+    u64 hcr = mrs(HCR_EL2);
+    hv_write_hcr(hcr | HCR_VI);
+    sysop("isb");
+}
+
+void hv_interrupt_clear_irq_pending(void)
+{
+    u64 hcr = mrs(HCR_EL2);
+    if (hcr & HCR_VI)
+    {
+        hv_write_hcr(hcr & ~HCR_VI);
+        sysop("isb");
+    }
+}
+
+void hv_evaluate_pending_irqs(void)
+{
+    u64 daif = hv_aic_crit_start();
+    {
+        if (PERCPU(total_pending_irqs) >= 0)
+        {
+            hv_interrupt_set_irq_pending();
+        }
+        else
+        {
+            hv_interrupt_clear_irq_pending();
+        }
+    }
+    hv_aic_crit_end(daif);
+}
+
+u64 hv_aic_crit_start(void)
+{
+    u64 daif = mrs(DAIF);
+
+    /*u64 hcr = mrs(HCR_EL2);
+    if (hcr & HCR_AMO) hcr &= ~HCR_AMO;
+    if (hcr & HCR_IMO) hcr &= ~HCR_IMO;
+    if (hcr & HCR_FMO) hcr &= ~HCR_FMO;
+    hv_write_hcr(hcr);*/
+
+    sysop("msr daifset, 0xf");
+    sysop("isb");
+    return daif;
+}
+
+void hv_aic_crit_end(u64 daif)
+{
+    /*u64 hcr = mrs(HCR_EL2);
+    if (!(hcr & HCR_AMO)) hcr |= HCR_AMO;
+    if (!(hcr & HCR_IMO)) hcr |= HCR_IMO;
+    if (!(hcr & HCR_FMO)) hcr |= HCR_FMO;
+    hv_write_hcr(hcr);*/
+
+    msr(DAIF, daif);
+    sysop("isb");
+}
+
+void hv_read_pending_irqs(void)
+{
+    u32 irq = 0;
+
+    do
+    {
+        u32 irq = read32(aic->base + aic->regs.event);
+        bool overflow = false;
+        if (irq != 0)
+        {
+            u64 daif = hv_aic_crit_start();
+            int64_t idx = ++PERCPU(total_pending_irqs);
+            {
+                if (PERCPU(total_pending_irqs) < MAX_ALLOWED_PENDING_INTERRUPTS)
+                {
+                    PERCPU(pending_irq_readouts)[idx] = irq;
+                }
+                else
+                {
+                    overflow = true;
+                }
+            }
+            hv_aic_crit_end(daif);
+
+            if (overflow)
+            {
+                // printf("Warning: on CPU%d there are too many pending IRQs, 0x%x discarded\n", smp_id(), irq);
+                break;
+            }
+            else
+            {
+                // printf("CPU%d: IRQ 0x%x pending written to %ld\n", smp_id(), irq, idx);
+            }
+        }
+    }
+    while (irq != 0);
 }

@@ -180,6 +180,11 @@
 #define HCR_SWIO     BIT(1)
 #define HCR_VM       BIT(0)
 
+#define DAIF_FIQ     BIT(6)
+#define DAIF_IRQ     BIT(7)
+#define DAIF_SError  BIT(8)
+#define DAIF_DBG     BIT(9)
+
 #define SYS_ID_AA64MMFR0_EL1   sys_reg(3, 0, 0, 7, 0)
 #define ID_AA64MMFR0_ECV       GENMASK(63, 60)
 #define ID_AA64MMFR0_FGT       GENMASK(59, 56)

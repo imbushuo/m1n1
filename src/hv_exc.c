@@ -456,6 +456,7 @@ void hv_exc_sync(struct exc_info *ctx)
         ctx->elr += 4;
         hv_set_elr(ctx->elr);
         hv_update_fiq();
+        hv_evaluate_pending_irqs();
         hv_wdt_breadcrumb('s');
         return;
     }
@@ -493,6 +494,7 @@ void hv_exc_sync(struct exc_info *ctx)
             hv_exc_proxy(ctx, START_EXCEPTION_LOWER, EXC_SYNC, NULL);
     }
 
+    hv_evaluate_pending_irqs();
     hv_exc_exit(ctx);
     hv_wdt_breadcrumb('s');
 }
@@ -503,21 +505,10 @@ void hv_exc_irq(struct exc_info *ctx)
 
     if ((mrs(ISR_EL1) & 0x80))
     {
-        PERCPU(irq_reason) = read32(aic->base + aic->regs.event);
-        if (PERCPU(irq_reason) && !PERCPU(irq_fired))
-        {
-            // printf("IRQ on CPU%d 0x%x\n", smp_id(), PERCPU(irq_reason));
-            u64 hcr = mrs(HCR_EL2);
-            PERCPU(irq_fired) = true;
-            hv_write_hcr(hcr | HCR_VI);
-        }
-        else if (PERCPU(irq_reason))
-        {
-            printf("Warning: on CPU%d there's pending IRQ not ack'd by VM but new IRQ arriving\n", smp_id());
-        }
-        // sysop("dsb sy");
-        // sysop("isb");
+        hv_read_pending_irqs();
     }
+
+    hv_evaluate_pending_irqs();
 }
 
 void hv_exc_fiq(struct exc_info *ctx)
@@ -539,6 +530,8 @@ void hv_exc_fiq(struct exc_info *ctx)
         // Non-interruptible CPU and it was just a timer tick (or spurious), so just update FIQs
         hv_update_fiq();
         hv_arm_tick(true);
+        hv_read_pending_irqs();
+        hv_evaluate_pending_irqs();
         return;
     }
 
@@ -590,6 +583,8 @@ void hv_exc_fiq(struct exc_info *ctx)
     hv_maybe_switch_cpu(ctx, START_HV, HV_CPU_SWITCH, NULL);
 
     // Handles guest timers
+    hv_read_pending_irqs();
+    hv_evaluate_pending_irqs();
     hv_exc_exit(ctx);
     hv_wdt_breadcrumb('f');
 }
@@ -600,6 +595,7 @@ void hv_exc_serr(struct exc_info *ctx)
     hv_get_context(ctx);
     hv_exc_entry();
     hv_exc_proxy(ctx, START_EXCEPTION_LOWER, EXC_SERROR, NULL);
+    hv_evaluate_pending_irqs();
     hv_exc_exit(ctx);
     hv_wdt_breadcrumb('e');
 }
