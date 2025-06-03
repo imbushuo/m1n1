@@ -85,6 +85,8 @@ TINF_OBJECTS := $(patsubst %,tinf/%, \
 
 DLMALLOC_OBJECTS := dlmalloc/malloc.o
 
+LFQUEUE_OBJECTS := lfqueue/lfqueue.o
+
 LIBFDT_OBJECTS := $(patsubst %,libfdt/%, \
 	fdt_addresses.o fdt_empty_tree.o fdt_ro.o fdt_rw.o fdt_strerror.o fdt_sw.o \
 	fdt_wip.o fdt.o)
@@ -163,7 +165,7 @@ OBJECTS := \
 	vsprintf.o \
 	wdt.o \
 	$(DCP_OBJECTS) \
-	$(MINILZLIB_OBJECTS) $(TINF_OBJECTS) $(DLMALLOC_OBJECTS) $(LIBFDT_OBJECTS) $(RUST_LIBS)
+	$(MINILZLIB_OBJECTS) $(TINF_OBJECTS) $(DLMALLOC_OBJECTS) $(LFQUEUE_OBJECTS) $(LIBFDT_OBJECTS) $(RUST_LIBS)
 
 FP_OBJECTS := \
 	kboot_gpu.o \

@@ -59,10 +59,6 @@ struct hv_pcpu_data {
     u32 pmc_pending;
     u64 pmc_irq_mode;
     u64 exc_entry_pmcr0_cnt;
-
-    // Improved interrupt handling
-    u32 pending_irq_readouts[MAX_ALLOWED_PENDING_INTERRUPTS];
-    volatile int64_t total_pending_irqs;
 } ALIGNED(64);
 
 /* VM */

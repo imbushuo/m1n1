@@ -8,13 +8,21 @@
 #include "smp.h"
 #include "utils.h"
 #include "string.h"
+#include "lfqueue/lfqueue.h"
+
+struct hv_aic_data {
+    // Improved interrupt handling
+    u32 pending_irq_readouts[MAX_ALLOWED_PENDING_INTERRUPTS];
+    volatile int64_t total_pending_irqs;
+    lfqueue_t pending_irqs_queue;
+} ALIGNED(64);
 
 #define IRQTRACE_IRQ BIT(0)
-#define PERCPU(x) pcpu[mrs(TPIDR_EL2)].x
+#define PERCPU(x) aic_pcpu[mrs(TPIDR_EL2)].x
 
 #define MAX_CPUS     24
 static u32 trace_hw_num[AIC_MAX_DIES][AIC_MAX_HW_NUM / 32];
-extern struct hv_pcpu_data pcpu[MAX_CPUS];
+static struct hv_aic_data aic_pcpu[MAX_CPUS];
 
 static bool trace_aic_event(struct exc_info *ctx, u64 addr, u64 *val, bool write, int width)
 {
@@ -103,6 +111,10 @@ void hv_hook_aic(void)
     u64 daif = hv_aic_crit_start();
     // memset(PERCPU(pending_irq_readouts), 0, sizeof(PERCPU(pending_irq_readouts)));
     PERCPU(total_pending_irqs) = -1;
+    if (lfqueue_init(&PERCPU(pending_irqs_queue)) != 0)
+    {
+        panic("Queue init failed for CPU%d\n", smp_id());
+    }
     hv_aic_crit_end(daif);
     printf("CPU%d: DAIF 0x%lx\n", smp_id(), daif);
 }
