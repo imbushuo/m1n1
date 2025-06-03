@@ -8,13 +8,15 @@
 #include "smp.h"
 #include "utils.h"
 #include "string.h"
-#include "lfqueue/lfqueue.h"
+#include "fifo/queue.h"
+
+FifoBuffer_typedef(u32, irq_queue_t);
 
 struct hv_aic_data {
     // Improved interrupt handling
-    u32 pending_irq_readouts[MAX_ALLOWED_PENDING_INTERRUPTS];
-    volatile int64_t total_pending_irqs;
-    lfqueue_t pending_irqs_queue;
+    irq_queue_t* pending_irqs_queue;
+    irq_queue_t backing_pending_irqs_queue;
+    u32 irq_backing_elem[MAX_ALLOWED_PENDING_INTERRUPTS];
 } ALIGNED(64);
 
 #define IRQTRACE_IRQ BIT(0)
@@ -24,24 +26,18 @@ struct hv_aic_data {
 static u32 trace_hw_num[AIC_MAX_DIES][AIC_MAX_HW_NUM / 32];
 static struct hv_aic_data aic_pcpu[MAX_CPUS];
 
-static bool trace_aic_event(struct exc_info *ctx, u64 addr, u64 *val, bool write, int width)
+static bool handle_aic_mmio(struct exc_info *ctx, u64 addr, u64 *val, bool write, int width)
 {
     if (addr == (aic->base + aic->regs.event) && !write && width == 2)
     {
         u32 readout = 0;
         u64 daif = hv_aic_crit_start();
-        int64_t cnt_pending_irq = PERCPU(total_pending_irqs)--;
+
+        if (!FifoBuffer_is_empty(PERCPU(pending_irqs_queue)))
         {
-            if (cnt_pending_irq >= 0)
-            {
-                readout = PERCPU(pending_irq_readouts)[cnt_pending_irq];
-                PERCPU(pending_irq_readouts)[cnt_pending_irq] = (u32) 0x0;
-            }
-            else if (cnt_pending_irq <= -1)
-            {
-                PERCPU(total_pending_irqs) = -1;
-            }
+            FifoBuffer_read(PERCPU(pending_irqs_queue), readout);
         }
+
         hv_aic_crit_end(daif);
         *val = readout;
         // printf("HV: CPU%d AIC event readout: 0x%x from %ld\n", smp_id(), readout, cnt_pending_irq);
@@ -91,7 +87,7 @@ bool hv_trace_irq(u32 type, u32 num, u32 count, u32 flags)
     static bool hooked = false;
 
     if (aic && !hooked) {
-        hv_map_hook(aic->base, trace_aic_event, aic->regs.reg_size);
+        hv_map_hook(aic->base, handle_aic_mmio, aic->regs.reg_size);
         hooked = true;
     }
 
@@ -102,19 +98,19 @@ void hv_hook_aic(void)
 {
     static bool hooked = false;
 
-    if (aic && !hooked) {
-        hv_map_hook(aic->base, trace_aic_event, aic->regs.reg_size);
+    if (aic && !hooked)
+    {
+        hv_map_hook(aic->base, handle_aic_mmio, aic->regs.reg_size);
         hooked = true;
     }
 
     printf("Initialize AIC hook and per CPU state on CPU%d\n", smp_id());
     u64 daif = hv_aic_crit_start();
-    // memset(PERCPU(pending_irq_readouts), 0, sizeof(PERCPU(pending_irq_readouts)));
-    PERCPU(total_pending_irqs) = -1;
-    if (lfqueue_init(&PERCPU(pending_irqs_queue)) != 0)
-    {
-        panic("Queue init failed for CPU%d\n", smp_id());
-    }
+
+    PERCPU(pending_irqs_queue) = &PERCPU(backing_pending_irqs_queue);
+    memset(PERCPU(irq_backing_elem), 0, sizeof(PERCPU(irq_backing_elem)));
+    FifoBuffer_init(PERCPU(pending_irqs_queue), MAX_ALLOWED_PENDING_INTERRUPTS, u32, PERCPU(irq_backing_elem));
+
     hv_aic_crit_end(daif);
     printf("CPU%d: DAIF 0x%lx\n", smp_id(), daif);
 }
@@ -140,7 +136,8 @@ void hv_evaluate_pending_irqs(void)
 {
     u64 daif = hv_aic_crit_start();
     {
-        if (PERCPU(total_pending_irqs) >= 0)
+        uint64_t cnt = FifoBuffer_count(PERCPU(pending_irqs_queue));
+        if (cnt > 0)
         {
             hv_interrupt_set_irq_pending();
         }
@@ -187,29 +184,16 @@ void hv_read_pending_irqs(void)
     do
     {
         u32 irq = read32(aic->base + aic->regs.event);
-        bool overflow = false;
         if (irq != 0)
         {
-            int64_t idx = ++PERCPU(total_pending_irqs);
+            if (!FifoBuffer_is_full(PERCPU(pending_irqs_queue)))
             {
-                if (PERCPU(total_pending_irqs) < MAX_ALLOWED_PENDING_INTERRUPTS)
-                {
-                    PERCPU(pending_irq_readouts)[idx] = irq;
-                }
-                else
-                {
-                    overflow = true;
-                }
-            }
-
-            if (overflow)
-            {
-                // printf("Warning: on CPU%d there are too many pending IRQs, 0x%x discarded\n", smp_id(), irq);
-                break;
+                FifoBuffer_write(PERCPU(pending_irqs_queue), irq);
             }
             else
             {
-                // printf("CPU%d: IRQ 0x%x pending written to %ld\n", smp_id(), irq, idx);
+                hv_aic_crit_end(daif);
+                panic("Failed to enqueue IRQ entry on CPU%d\n", smp_id());
             }
         }
     }

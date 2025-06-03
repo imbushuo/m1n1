@@ -13,6 +13,9 @@
 #define MORECORE_CONTIGUOUS   1
 #define MALLOC_ALIGNMENT      16
 #define ABORT                 panic("dlmalloc: internal error\n")
+#define ABORT_CORRUPTION      panic("dlmalloc: corruption internal error\n")
+#define ABORT_USAGE           panic("dlmalloc: usage error\n")
+#define ABORT_USER_ERROR      panic("dlmalloc: refused on allocation with misalignments\n")
 #define NO_MALLINFO           1
 #define NO_MALLOC_STATS       1
 #define malloc_getpagesize    get_page_size()
